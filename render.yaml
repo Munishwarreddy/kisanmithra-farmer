@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: kisanmithra-api
+    runtime: node
+    rootDir: api
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/test
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 22.22.0
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRE
+        value: 90d
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CLIENT_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GOOGLE_TRANSLATE_API_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false

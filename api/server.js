@@ -148,7 +148,7 @@ if (!isNetlify) {
   connectDatabase().catch((err) => console.error('❌ Database initialization error:', err));
 
   // Start the traditional long-running server for local development/hosting.
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 KisanMithra API Server running on port ${PORT}`);
     console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🌐 Base URL: http://localhost:${PORT}`);
