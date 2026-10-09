@@ -1,7 +1,16 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, "");
+const API_URL = configuredApiUrl || (import.meta.env.DEV ? "http://localhost:5000/api" : "");
+
+const getApiUrl = () => {
+  if (!API_URL) {
+    throw new Error("The API is not configured. Set VITE_API_URL in Vercel and redeploy the client.");
+  }
+
+  return API_URL;
+};
 
 // Load user from token
 export const loadUser = createAsyncThunk(
@@ -19,12 +28,12 @@ export const loadUser = createAsyncThunk(
         },
       };
 
-      const { data } = await axios.get(`${API_URL}/auth/me`, config);
+      const { data } = await axios.get(`${getApiUrl()}/auth/me`, config);
       return data;
     } catch (error) {
       localStorage.removeItem("token");
       return rejectWithValue(
-        error.response?.data?.message || "Failed to load user"
+        error.response?.data?.message || error.message || "Failed to load user"
       );
     }
   }
@@ -35,12 +44,12 @@ export const login = createAsyncThunk(
   "auth/login",
   async (credentials, { rejectWithValue }) => {
     try {
-      const { data } = await axios.post(`${API_URL}/auth/login`, credentials);
+      const { data } = await axios.post(`${getApiUrl()}/auth/login`, credentials);
       localStorage.setItem("token", data.token);
       return data;
     } catch (error) {
       return rejectWithValue(
-        error.response?.data?.message || "Login failed"
+        error.response?.data?.message || error.message || "Login failed"
       );
     }
   }
@@ -51,12 +60,12 @@ export const register = createAsyncThunk(
   "auth/register",
   async (userData, { rejectWithValue }) => {
     try {
-      const { data } = await axios.post(`${API_URL}/auth/register`, userData);
+      const { data } = await axios.post(`${getApiUrl()}/auth/register`, userData);
       // We no longer automatically set the token so the user must sign in manually
       return data;
     } catch (error) {
       return rejectWithValue(
-        error.response?.data?.message || "Registration failed"
+        error.response?.data?.message || error.message || "Registration failed"
       );
     }
   }
@@ -67,14 +76,14 @@ export const googleLogin = createAsyncThunk(
   "auth/googleLogin",
   async (tokenResponse, { rejectWithValue }) => {
     try {
-      const { data } = await axios.post(`${API_URL}/auth/google`, {
+      const { data } = await axios.post(`${getApiUrl()}/auth/google`, {
         token: tokenResponse.credential,
       });
       localStorage.setItem("token", data.token);
       return data;
     } catch (error) {
       return rejectWithValue(
-        error.response?.data?.message || "Google login failed"
+        error.response?.data?.message || error.message || "Google login failed"
       );
     }
   }
@@ -91,11 +100,11 @@ export const updateProfile = createAsyncThunk(
           Authorization: `Bearer ${token}`,
         },
       };
-      const { data } = await axios.put(`${API_URL}/users/profile`, userData, config);
+      const { data } = await axios.put(`${getApiUrl()}/users/profile`, userData, config);
       return data;
     } catch (error) {
       return rejectWithValue(
-        error.response?.data?.message || "Profile update failed"
+        error.response?.data?.message || error.message || "Profile update failed"
       );
     }
   }

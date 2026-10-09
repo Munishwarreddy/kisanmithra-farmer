@@ -88,20 +88,20 @@ const RegisterPage = () => {
     }
 
     setPasswordError("");
-    const addressString = [
-      formData.address.street,
-      formData.address.city,
-      formData.address.state,
-      formData.address.zipCode
-    ].filter(Boolean).join(", ");
+    const address = Object.fromEntries(
+      Object.entries(formData.address).filter(([, value]) => value.trim())
+    );
 
     const userData = {
       name: formData.name,
       email: formData.email,
       password: formData.password,
       role: formData.role,
-      address: addressString,
     };
+
+    if (Object.keys(address).length > 0) {
+      userData.address = address;
+    }
 
     if (formData.phone) {
       userData.phone = formData.phone;

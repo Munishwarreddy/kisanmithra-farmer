@@ -42,6 +42,13 @@ exports.register = async (req, res) => {
   try {
     const { name, email, password, role, phone, address } = req.body;
 
+    if (User.db.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: "Database is unavailable. Check the MONGO_URI setting in Render and try again.",
+      });
+    }
+
     const userExists = await User.findOne({ email });
 
     if (userExists) {
@@ -77,6 +84,21 @@ exports.register = async (req, res) => {
     }
   } catch (error) {
     console.error(error);
+
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: Object.values(error.errors).map(({ message }) => message).join(" "),
+      });
+    }
+
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "User already exists",
+      });
+    }
+
     res
       .status(500)
       .json({ success: false, message: "Server error", error: error.message });
