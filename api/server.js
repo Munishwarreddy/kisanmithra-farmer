@@ -32,10 +32,21 @@ const aiRoutes = require('./routes/aiRoutes');
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
+const isNetlify = process.env.NETLIFY === 'true' || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  process.env.CLIENT_URL,
+].filter(Boolean);
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'https://vercel.app'],
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Origin is not allowed by CORS'));
+  },
   credentials: true
 }));
 app.use(express.json());
@@ -53,7 +64,7 @@ const connectDatabase = async () => {
     });
     console.log('✅ MongoDB connected successfully to primary database');
   } catch (err) {
-    if (uri.includes('localhost') || uri.includes('127.0.0.1')) {
+    if (!isNetlify && (uri.includes('localhost') || uri.includes('127.0.0.1'))) {
       console.warn('⚠️ Primary MongoDB connection failed. Starting fallback in-memory database for project demonstration...');
       const { MongoMemoryServer } = require('mongodb-memory-server');
       const memoryServer = await MongoMemoryServer.create();
@@ -65,18 +76,19 @@ const connectDatabase = async () => {
       console.log('✅ Connected to MongoDB Memory Server successfully!');
     } else {
       console.error('❌ MongoDB connection error:', err);
-      process.exit(1);
+      throw err;
     }
   }
 
-  // Initialize automation after database connection
-  initializeSubscriptionAutomation();
-  initializeContractAutomation();
-  const io = initializeSocketIO(server);
-  setSocketIO(io);
+  // Netlify Functions are short-lived request handlers; cron jobs and
+  // persistent Socket.IO connections need a long-running server instead.
+  if (!isNetlify) {
+    initializeSubscriptionAutomation();
+    initializeContractAutomation();
+    const io = initializeSocketIO(server);
+    setSocketIO(io);
+  }
 };
-
-connectDatabase().catch((err) => console.error('❌ Database initialization error:', err));
 
 // Basic routes
 app.get('/', (req, res) => {
@@ -132,11 +144,17 @@ app.use((req, res) => {
   });
 });
 
-// Start server
-server.listen(PORT, () => {
-  console.log(`🚀 KisanMithra API Server running on port ${PORT}`);
-  console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🌐 Base URL: http://localhost:${PORT}`);
-  console.log(`🔗 API Health: http://localhost:${PORT}/api/test`);
-  console.log(`🔌 Socket.io: Ready for real-time connections`);
-});
+if (!isNetlify) {
+  connectDatabase().catch((err) => console.error('❌ Database initialization error:', err));
+
+  // Start the traditional long-running server for local development/hosting.
+  server.listen(PORT, () => {
+    console.log(`🚀 KisanMithra API Server running on port ${PORT}`);
+    console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🌐 Base URL: http://localhost:${PORT}`);
+    console.log(`🔗 API Health: http://localhost:${PORT}/api/test`);
+    console.log(`🔌 Socket.io: Ready for real-time connections`);
+  });
+}
+
+module.exports = { app, connectDatabase };

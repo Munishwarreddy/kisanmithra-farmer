@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { FaRobot, FaTimes, FaLocationArrow, FaTrash } from 'react-icons/fa';
 import axios from 'axios';
 
+const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
+
 const FloatingChatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
@@ -41,7 +43,11 @@ const FloatingChatbot = () => {
     setIsTyping(true);
 
     try {
-      const { data } = await axios.post('http://localhost:5000/api/ai/chat', {
+      if (!API_URL) {
+        throw new Error('The chat service URL is not configured.');
+      }
+
+      const { data } = await axios.post(`${API_URL}/ai/chat`, {
         message: inputValue,
         history: messages.filter(m => !m.isInitial),
       });
@@ -53,7 +59,12 @@ const FloatingChatbot = () => {
       }
     } catch (error) {
       console.error(error);
-      setMessages((prev) => [...prev, { role: 'model', parts: [{ text: "Sorry, I am having trouble connecting right now. Please try again later." }] }]);
+      const message = error.response?.data?.message ||
+        (error.message === 'The chat service URL is not configured.'
+          ? 'The chat service is still being configured. Please try again shortly.'
+          : 'Sorry, I am having trouble connecting right now. Please try again later.');
+
+      setMessages((prev) => [...prev, { role: 'model', parts: [{ text: message }] }]);
     } finally {
       setIsTyping(false);
     }
