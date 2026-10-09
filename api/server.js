@@ -33,16 +33,20 @@ const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 const isNetlify = process.env.NETLIFY === 'true' || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+const normalizeOrigin = (origin) => origin?.replace(/\/+$/, '');
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
   process.env.CLIENT_URL,
-].filter(Boolean);
+].map(normalizeOrigin).filter(Boolean);
 
 // Middleware
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    const requestOrigin = normalizeOrigin(origin);
+    const isVercelDeployment = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(requestOrigin || '');
+
+    if (!requestOrigin || allowedOrigins.includes(requestOrigin) || isVercelDeployment) {
       return callback(null, true);
     }
     return callback(new Error('Origin is not allowed by CORS'));

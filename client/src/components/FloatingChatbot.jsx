@@ -55,14 +55,14 @@ const FloatingChatbot = () => {
       if (data.success) {
         setMessages((prev) => [...prev, { role: 'model', parts: [{ text: data.data }] }]);
       } else {
-        throw new Error("Failed to get response");
+        throw new Error(data.message || 'The chat service did not return a response.');
       }
     } catch (error) {
       console.error(error);
       const message = error.response?.data?.message ||
         (error.message === 'The chat service URL is not configured.'
           ? 'The chat service is still being configured. Please try again shortly.'
-          : 'Sorry, I am having trouble connecting right now. Please try again later.');
+          : error.message || 'Sorry, I am having trouble connecting right now. Please try again later.');
 
       setMessages((prev) => [...prev, { role: 'model', parts: [{ text: message }] }]);
     } finally {
