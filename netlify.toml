@@ -2,14 +2,14 @@
   base = "api"
   command = "npm run build"
   publish = "public"
-  functions = "netlify/functions"
 
 [functions]
+  directory = "netlify/functions"
   node_bundler = "esbuild"
   external_node_modules = ["express", "serverless-http", "mongodb-memory-server"]
 
 [[redirects]]
   from = "/api/*"
-  to = "/.netlify/functions/api/:splat"
+  to = "/.netlify/functions/backend/:splat"
   status = 200
   force = true
