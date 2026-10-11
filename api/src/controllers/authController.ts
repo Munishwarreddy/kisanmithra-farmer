@@ -51,15 +51,11 @@ export const register = async (req: AuthRequest, res: Response, next: NextFuncti
       address
     });
 
-    // Generate token
-    const token = generateToken(user._id.toString());
-
     res.status(201).json({
       success: true,
       message: 'User registered successfully',
       data: {
-        user: user.getProfile(),
-        token
+        user: user.getProfile()
       }
     });
   } catch (error: any) {

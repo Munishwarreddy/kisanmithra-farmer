@@ -93,8 +93,8 @@ const RegisterPage = () => {
     );
 
     const userData = {
-      name: formData.name,
-      email: formData.email,
+      name: formData.name.trim(),
+      email: formData.email.trim().toLowerCase(),
       password: formData.password,
       role: formData.role,
     };
@@ -109,10 +109,8 @@ const RegisterPage = () => {
 
     try {
       await dispatch(register(userData)).unwrap();
-      toast.success("Account created successfully! Redirecting to login...");
-      setTimeout(() => {
-        navigate("/login");
-      }, 2000);
+      toast.success("Account created successfully. Please sign in.");
+      navigate("/login", { replace: true });
     } catch (err) {
       toast.error(err || "Registration failed. Please check the form.");
     }
@@ -175,10 +173,21 @@ const RegisterPage = () => {
 
           {error && (
             <div
-              className="mt-6 bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded-lg shadow-sm animate-slide-up"
+              className="mt-6 bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded-lg shadow-sm animate-slide-up space-y-2"
               role="alert"
             >
-              <span className="block sm:inline font-medium">{error}</span>
+              <div className="font-semibold">{error}</div>
+              {error.toLowerCase().includes("already exist") && (
+                <div className="text-sm text-gray-700 bg-white/80 p-2.5 rounded-lg border border-red-200 flex items-center justify-between">
+                  <span>Already have an account with this email?</span>
+                  <Link
+                    to="/login"
+                    className="font-bold text-green-700 hover:text-green-800 underline ml-2 whitespace-nowrap"
+                  >
+                    Sign in here →
+                  </Link>
+                </div>
+              )}
             </div>
           )}
 

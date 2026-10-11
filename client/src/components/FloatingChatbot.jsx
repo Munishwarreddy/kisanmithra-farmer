@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FaRobot, FaTimes, FaLocationArrow, FaTrash } from 'react-icons/fa';
 import axios from 'axios';
+import { getApiBaseUrl } from '../utils/apiUrl';
 
-const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
+const API_URL = getApiBaseUrl();
 
 const FloatingChatbot = () => {
   const [isOpen, setIsOpen] = useState(false);

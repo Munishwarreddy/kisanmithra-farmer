@@ -5,6 +5,7 @@ import { useDispatch, useSelector } from "react-redux";
 import Loader from "../../components/Loader";
 import { FaSearch, FaTrash, FaStar } from "react-icons/fa";
 import axios from "axios";
+import { getApiBaseUrl } from "../../utils/apiUrl";
 
 const ReviewsPage = () => {
   const { user } = useSelector((state) => state.auth);
@@ -22,7 +23,7 @@ const ReviewsPage = () => {
       setLoading(true);
       // Fetch all products and their reviews
       const productsResponse = await axios.get(
-        `${import.meta.env.VITE_API_URL}/products`
+        `${getApiBaseUrl()}/products`
       );
       const products = productsResponse.data;
 
@@ -54,7 +55,7 @@ const ReviewsPage = () => {
     if (window.confirm("Are you sure you want to delete this review?")) {
       try {
         await axios.delete(
-          `${import.meta.env.VITE_API_URL}/admin/reviews/${reviewId}`,
+          `${getApiBaseUrl()}/admin/reviews/${reviewId}`,
           {
             headers: {
               Authorization: `Bearer ${user.token}`,

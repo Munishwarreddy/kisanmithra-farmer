@@ -82,13 +82,9 @@ function App() {
   useEffect(() => {
     if (isAuthenticated && token) {
       socketService.connect(token);
+    } else {
+      socketService.disconnect();
     }
-
-    return () => {
-      if (!isAuthenticated) {
-        socketService.disconnect();
-      }
-    };
   }, [isAuthenticated, token]);
 
   return (

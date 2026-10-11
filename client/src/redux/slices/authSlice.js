@@ -1,8 +1,8 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
+import { getApiBaseUrl } from "../../utils/apiUrl";
 
-const configuredApiUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, "");
-const API_URL = configuredApiUrl || (import.meta.env.DEV ? "http://localhost:5000/api" : "");
+const API_URL = getApiBaseUrl();
 
 const getApiUrl = () => {
   if (!API_URL) {
@@ -11,6 +11,10 @@ const getApiUrl = () => {
 
   return API_URL;
 };
+
+// The JavaScript API returns auth fields at the top level, while the TypeScript
+// API wraps them in `data`. Accept both response shapes.
+const normalizeAuthResponse = (response) => response.data || response;
 
 // Load user from token
 export const loadUser = createAsyncThunk(
@@ -29,7 +33,7 @@ export const loadUser = createAsyncThunk(
       };
 
       const { data } = await axios.get(`${getApiUrl()}/auth/me`, config);
-      return data;
+      return normalizeAuthResponse(data);
     } catch (error) {
       localStorage.removeItem("token");
       return rejectWithValue(
@@ -45,8 +49,9 @@ export const login = createAsyncThunk(
   async (credentials, { rejectWithValue }) => {
     try {
       const { data } = await axios.post(`${getApiUrl()}/auth/login`, credentials);
-      localStorage.setItem("token", data.token);
-      return data;
+      const auth = normalizeAuthResponse(data);
+      localStorage.setItem("token", auth.token);
+      return auth;
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message || error.message || "Login failed"
@@ -61,8 +66,10 @@ export const register = createAsyncThunk(
   async (userData, { rejectWithValue }) => {
     try {
       const { data } = await axios.post(`${getApiUrl()}/auth/register`, userData);
-      // We no longer automatically set the token so the user must sign in manually
-      return data;
+      const auth = normalizeAuthResponse(data);
+      // Registration creates an account only. Authentication must happen via login.
+      localStorage.removeItem("token");
+      return { user: auth.user };
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message || error.message || "Registration failed"
@@ -174,8 +181,9 @@ const authSlice = createSlice({
       })
       .addCase(register.fulfilled, (state, action) => {
         state.loading = false;
-        // User must explicitly log in after registration per requirement
         state.isAuthenticated = false;
+        state.user = null;
+        state.token = null;
         state.error = null;
       })
       .addCase(register.rejected, (state, action) => {

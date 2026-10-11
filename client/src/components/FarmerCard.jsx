@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { saveFarmer, unsaveFarmer } from "../redux/slices/savedFarmersSlice";
+import { toast } from "react-toastify";
 import { FaMapMarkerAlt, FaLeaf, FaStar, FaTractor, FaArrowRight, FaHeart, FaRegHeart, FaSeedling } from "react-icons/fa";
 import "../styles/animations.css";
 
@@ -12,7 +13,7 @@ const FarmerCard = ({ farmer }) => {
 
   const isSaved = savedFarmers.some(sf => sf.farmer._id === farmer._id);
 
-  const handleSaveFarmer = (e) => {
+  const handleSaveFarmer = async (e) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -26,10 +27,16 @@ const FarmerCard = ({ farmer }) => {
       return;
     }
 
-    if (isSaved) {
-      dispatch(unsaveFarmer(farmer._id));
-    } else {
-      dispatch(saveFarmer(farmer._id));
+    try {
+      if (isSaved) {
+        await dispatch(unsaveFarmer(farmer._id)).unwrap();
+        toast.success("Farmer removed from your saved list.");
+      } else {
+        await dispatch(saveFarmer({ farmerId: farmer._id, farmerData: farmer })).unwrap();
+        toast.success("Farmer saved successfully.");
+      }
+    } catch (error) {
+      toast.error(error || "Could not update your saved farmers.");
     }
   };
   return (

@@ -116,6 +116,10 @@ const CheckoutPage = () => {
     );
   };
 
+  const isDemoOrder =
+    !/^[a-f\d]{24}$/i.test(String(farmerId || "")) ||
+    cartItems.some((item) => !/^[a-f\d]{24}$/i.test(String(item.productId || "")));
+
   const handleSubmitOrder = (e) => {
     e.preventDefault();
 
@@ -129,7 +133,12 @@ const CheckoutPage = () => {
         product: item.productId,
         quantity: item.quantity,
         price: item.price,
+        name: item.name,
+        unit: item.unit,
+        image: item.image,
       })),
+      farmerName,
+      farmerEmail: cartItems[0]?.farmerEmail,
       notes: orderDetails.notes,
     };
 
@@ -525,6 +534,12 @@ const CheckoutPage = () => {
                   placeholder="Any special instructions or requests..."
                 ></textarea>
               </div>
+
+              {isDemoOrder && (
+                <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="status">
+                  This cart contains sample catalog products. The demo order will be saved in this browser and will not be sent to a farmer or charge a payment method.
+                </div>
+              )}
 
               <button
                 type="submit"

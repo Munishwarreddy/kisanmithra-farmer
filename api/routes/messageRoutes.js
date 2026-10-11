@@ -4,6 +4,7 @@ const {
   getConversations,
   getMessages,
   markAsRead,
+  markConversationAsRead,
 } = require("../controllers/messageController");
 const { verifyToken } = require("../utils/authMiddleware");
 
@@ -17,6 +18,9 @@ router.get("/conversations", verifyToken, getConversations);
 
 // GET /api/messages/:conversationId - Get messages in a conversation
 router.get("/:conversationId", verifyToken, getMessages);
+
+// Mark all unread messages in a conversation as read.
+router.put("/conversation/:userId/read", verifyToken, markConversationAsRead);
 
 // PUT /api/messages/:id/read - Mark message as read
 router.put("/:id/read", verifyToken, markAsRead);

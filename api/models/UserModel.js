@@ -12,6 +12,8 @@ const UserSchema = new mongoose.Schema(
       type: String,
       required: [true, "Please add an email"],
       unique: true,
+      trim: true,
+      lowercase: true,
       match: [
         /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
         "Please add a valid email",
@@ -98,7 +100,6 @@ UserSchema.methods.matchPassword = async function (enteredPassword) {
 };
 
 // Indexes
-UserSchema.index({ email: 1 }, { unique: true });
 UserSchema.index({ role: 1 });
 UserSchema.index({ isActive: 1 });
 // Text index for search (farmer names)

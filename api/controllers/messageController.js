@@ -1,5 +1,6 @@
 const Message = require("../models/MessageModel");
 const User = require("../models/UserModel");
+const mongoose = require("mongoose");
 const Notification = require("../models/NotificationModel");
 const { emitToUser, emitToConversation, isUserOnline } = require("../services/socketService");
 const translationService = require("../services/ai/translationService");
@@ -17,10 +18,10 @@ const generateConversationId = (userId1, userId2) => {
 // @access  Private
 exports.sendMessage = async (req, res) => {
   try {
-    const { recipient, content } = req.body;
+    const { recipient, recipientEmail, content } = req.body;
 
     // Validate required fields
-    if (!recipient || !content) {
+    if ((!recipient && !recipientEmail) || !content) {
       return res.status(400).json({
         success: false,
         message: "Recipient and content are required",
@@ -35,17 +36,29 @@ exports.sendMessage = async (req, res) => {
       });
     }
 
-    // Check if recipient exists
-    const recipientUser = await User.findById(recipient);
+    // Demo catalog farmers have stable email addresses but placeholder IDs
+    // (for example "ap1"). Resolve those to real farmer accounts before saving.
+    let recipientUser = null;
+    if (recipient && mongoose.Types.ObjectId.isValid(recipient)) {
+      recipientUser = await User.findById(recipient);
+    }
+    if (!recipientUser && recipientEmail) {
+      recipientUser = await User.findOne({
+        email: recipientEmail.trim().toLowerCase(),
+        role: "farmer",
+      });
+    }
     if (!recipientUser) {
       return res.status(404).json({
         success: false,
-        message: "Recipient not found",
+        message: recipientEmail ? "Farmer account not found for this product" : "Recipient not found",
       });
     }
 
+    const recipientId = recipientUser._id;
+
     // Check if sender and recipient are different
-    if (req.user._id.toString() === recipient.toString()) {
+    if (req.user._id.toString() === recipientId.toString()) {
       return res.status(400).json({
         success: false,
         message: "Cannot send message to yourself",
@@ -53,7 +66,7 @@ exports.sendMessage = async (req, res) => {
     }
 
     // Generate conversationId
-    const conversationId = generateConversationId(req.user._id, recipient);
+    const conversationId = generateConversationId(req.user._id, recipientId);
 
     // Detect language and translate message asynchronously
     let originalLanguage = 'en';
@@ -100,7 +113,7 @@ exports.sendMessage = async (req, res) => {
     const message = await Message.create({
       conversationId,
       sender: req.user._id,
-      recipient,
+      recipient: recipientId,
       content: content.trim(),
       originalLanguage,
       translations
@@ -112,11 +125,11 @@ exports.sendMessage = async (req, res) => {
 
     // Create notification for recipient (Requirement 9.2)
     await Notification.create({
-      user: recipient,
+      user: recipientId,
       type: "message",
       title: "New Message",
       message: `You have a new message from ${req.user.name}`,
-      link: `/messages/${conversationId}`,
+      link: `/messages/${req.user._id}`,
       metadata: {
         senderId: req.user._id,
         senderName: req.user.name,
@@ -126,13 +139,23 @@ exports.sendMessage = async (req, res) => {
     });
 
     // Emit real-time notification if recipient is online
-    const recipientOnline = isUserOnline(recipient);
+    const recipientOnline = isUserOnline(recipientId);
     if (recipientOnline) {
       // Get translated content for recipient
       const recipientLanguage = recipientUser.preferences?.language || 'en';
       const translatedContent = translations[recipientLanguage] || content.trim();
+
+      emitToUser(recipientId, 'message:new', {
+        conversationId,
+        message: {
+          ...message.toObject(),
+          displayContent: translatedContent,
+          isTranslated: recipientLanguage !== originalLanguage,
+          originalLanguage,
+        },
+      });
       
-      emitToUser(recipient, 'message:notification', {
+      emitToUser(recipientId, 'message:notification', {
         conversationId,
         sender: {
           _id: req.user._id,
@@ -144,6 +167,17 @@ exports.sendMessage = async (req, res) => {
         createdAt: message.createdAt
       });
     }
+
+    // Keep other open tabs for the sender in sync with the REST response.
+    emitToUser(req.user._id, 'message:new', {
+      conversationId,
+      message: {
+        ...message.toObject(),
+        displayContent: translations[req.user.preferences?.language || 'en'] || content.trim(),
+        isTranslated: (req.user.preferences?.language || 'en') !== originalLanguage,
+        originalLanguage,
+      },
+    });
 
     res.status(201).json({
       success: true,
@@ -170,7 +204,7 @@ exports.sendMessage = async (req, res) => {
 
             // Emit sentiment to farmer if online
             if (recipientOnline) {
-              emitToUser(recipient, 'message:sentiment', {
+              emitToUser(recipientId, 'message:sentiment', {
                 messageId: message._id,
                 sentiment: {
                   label: sentiment.label,
@@ -211,7 +245,7 @@ exports.sendMessage = async (req, res) => {
 
             // Emit smart replies to farmer if online
             if (recipientOnline) {
-              emitToUser(recipient, 'message:smart-replies', {
+              emitToUser(recipientId, 'message:smart-replies', {
                 messageId: message._id,
                 replies: smartReplies
               });
@@ -241,7 +275,7 @@ exports.sendMessage = async (req, res) => {
             // Create or update deal summary
             const summary = existingSummary || new DealSummary({
               conversationId,
-              participants: [req.user._id, recipient]
+              participants: [req.user._id, recipientId]
             });
             
             summary.product = {
@@ -274,7 +308,7 @@ exports.sendMessage = async (req, res) => {
             
             // Emit to recipient if online
             if (recipientOnline) {
-              emitToUser(recipient, 'deal:summary', summaryData);
+              emitToUser(recipientId, 'deal:summary', summaryData);
             }
             
             console.log('Deal summary generated and emitted:', summary._id);
@@ -480,5 +514,30 @@ exports.markAsRead = async (req, res) => {
       message: "Server error",
       error: error.message,
     });
+  }
+};
+
+// Mark all unread messages from one conversation as read for the current user.
+exports.markConversationAsRead = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ success: false, message: "Invalid conversation user" });
+    }
+
+    const conversationId = generateConversationId(req.user._id, userId);
+    const result = await Message.updateMany(
+      { conversationId, recipient: req.user._id, isRead: false },
+      { $set: { isRead: true, readAt: new Date() } }
+    );
+
+    res.json({
+      success: true,
+      message: "Conversation marked as read",
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (error) {
+    console.error("Error marking conversation as read:", error);
+    res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };

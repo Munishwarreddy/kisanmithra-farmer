@@ -45,8 +45,9 @@ app.use(cors({
   origin: (origin, callback) => {
     const requestOrigin = normalizeOrigin(origin);
     const isVercelDeployment = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(requestOrigin || '');
+    const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(requestOrigin || '');
 
-    if (!requestOrigin || allowedOrigins.includes(requestOrigin) || isVercelDeployment) {
+    if (!requestOrigin || allowedOrigins.includes(requestOrigin) || isVercelDeployment || isLocalhost) {
       return callback(null, true);
     }
     return callback(new Error('Origin is not allowed by CORS'));

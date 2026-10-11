@@ -9,6 +9,8 @@ import {
 } from "../redux/slices/farmerSlice";
 import { getProducts } from "../redux/slices/productSlice";
 import { sendMessage } from "../redux/slices/messageSlice";
+import { resolveFarmerId } from "../utils/resolveFarmerId";
+import { toast } from "react-toastify";
 import { saveFarmer, unsaveFarmer } from "../redux/slices/savedFarmersSlice";
 import ProductCard from "../components/ProductCard";
 import Loader from "../components/Loader";
@@ -34,6 +36,7 @@ const FarmerDetailPage = () => {
 
   const [showMessageForm, setShowMessageForm] = useState(false);
   const [message, setMessage] = useState("");
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
 
   const { farmerProfile, loading } = useSelector((state) => state.farmers);
   const { products, loading: productsLoading } = useSelector(
@@ -41,8 +44,11 @@ const FarmerDetailPage = () => {
   );
   const { isAuthenticated, user } = useSelector((state) => state.auth);
   const { farmers: savedFarmers } = useSelector((state) => state.savedFarmers);
-  
-  const isSaved = savedFarmers.some(sf => sf.farmer._id === id);
+  const farmerData = farmerProfile?.farmer || farmerProfile;
+  const isSaved = savedFarmers.some((saved) =>
+    saved.farmer?._id === id ||
+    (farmerData?.email && saved.farmer?.email?.toLowerCase() === farmerData.email.toLowerCase())
+  );
 
   useEffect(() => {
     dispatch(getFarmerProfile(id));
@@ -53,7 +59,7 @@ const FarmerDetailPage = () => {
     };
   }, [dispatch, id]);
 
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
 
     if (!isAuthenticated) {
@@ -61,36 +67,60 @@ const FarmerDetailPage = () => {
       return;
     }
 
+    if (user?.role !== "consumer") {
+      toast.error("Only consumers can send a message to a farmer.");
+      return;
+    }
+
     if (!message.trim()) {
       return;
     }
 
-    dispatch(
-      sendMessage({
-        receiver: id,
+    setIsSendingMessage(true);
+    let messageRequestStarted = false;
+    try {
+      const recipientId = await resolveFarmerId({
+        _id: farmerProfile?.farmer?._id || farmerProfile?._id || id,
+        email: farmerProfile?.farmer?.email || farmerProfile?.email,
+      });
+      messageRequestStarted = true;
+      await dispatch(sendMessage({
+        recipient: recipientId,
         content: message,
-      })
-    );
-
-    setMessage("");
-    setShowMessageForm(false);
+      })).unwrap();
+      toast.success("Message sent to the farmer.");
+      setMessage("");
+      setShowMessageForm(false);
+    } catch (error) {
+      if (!messageRequestStarted) {
+        toast.error(error.message || "Could not find this farmer.");
+      }
+    } finally {
+      setIsSendingMessage(false);
+    }
   };
 
-  const handleSaveFarmer = () => {
+  const handleSaveFarmer = async () => {
     if (!isAuthenticated) {
       navigate("/login");
       return;
     }
     
-    if (user.role !== "farmer") {
-      alert("Only consumers can save farmers");
+    if (user?.role !== "consumer") {
+      toast.error("Only consumers can save farmers");
       return;
     }
     
-    if (isSaved) {
-      dispatch(unsaveFarmer(id));
-    } else {
-      dispatch(saveFarmer(id));
+    try {
+      if (isSaved) {
+        await dispatch(unsaveFarmer(id)).unwrap();
+        toast.success("Farmer removed from your saved list.");
+      } else {
+        await dispatch(saveFarmer({ farmerId: id, farmerData })).unwrap();
+        toast.success("Farmer saved successfully.");
+      }
+    } catch (error) {
+      toast.error(error || "Could not update your saved farmers.");
     }
   };
 
@@ -255,9 +285,10 @@ const FarmerDetailPage = () => {
                     <div className="flex gap-2 mt-3">
                       <button 
                         type="submit" 
+                        disabled={isSendingMessage}
                         className="flex-1 bg-green-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors"
                       >
-                        Send Message
+                        {isSendingMessage ? "Sending..." : "Send Message"}
                       </button>
                       <button
                         type="button"

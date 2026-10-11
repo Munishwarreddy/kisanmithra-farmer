@@ -11,6 +11,7 @@ import { addToCart } from "../redux/slices/cartSlice";
 import { sendMessage } from "../redux/slices/messageSlice";
 import { addToWishlist, removeFromWishlist } from "../redux/slices/wishlistSlice";
 import { createSubscription } from "../redux/slices/subscriptionSlice";
+import { toast } from "react-toastify";
 import Loader from "../components/Loader";
 import {
   FaLeaf,
@@ -25,6 +26,7 @@ import {
   FaTimes,
 } from "react-icons/fa";
 import { placeholder } from "../assets";
+import { resolveFarmerId } from "../utils/resolveFarmerId";
 
 const ProductDetailPage = () => {
   const { id } = useParams();
@@ -35,6 +37,7 @@ const ProductDetailPage = () => {
   const [activeImage, setActiveImage] = useState(0);
   const [showMessageForm, setShowMessageForm] = useState(false);
   const [message, setMessage] = useState("");
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [subscriptionData, setSubscriptionData] = useState({
     frequency: "weekly",
@@ -86,7 +89,7 @@ const ProductDetailPage = () => {
     dispatch(addToCart({ product, quantity }));
   };
 
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
 
     if (!isAuthenticated) {
@@ -94,19 +97,39 @@ const ProductDetailPage = () => {
       return;
     }
 
+    if (user?.role !== "consumer") {
+      toast.error("Only consumers can message a farmer from a product page.");
+      return;
+    }
+
     if (!message.trim()) {
       return;
     }
 
-    dispatch(
-      sendMessage({
-        recipient: product.farmer._id || product.farmer,
-        content: message,
-      })
-    );
+    setIsSendingMessage(true);
+    let messageRequestStarted = false;
+    try {
+      const recipientId = await resolveFarmerId({
+        _id: product.farmer?._id || product.farmer,
+        email: product.farmerEmail,
+      });
 
-    setMessage("");
-    setShowMessageForm(false);
+      messageRequestStarted = true;
+      await dispatch(sendMessage({
+        recipient: recipientId,
+        content: message,
+      })).unwrap();
+      toast.success("Message sent to the farmer.");
+      setMessage("");
+      setShowMessageForm(false);
+    } catch (error) {
+      // Keep the message in the form so the user can retry after an error.
+      if (!messageRequestStarted) {
+        toast.error(error.response?.data?.message || error.message || "Could not find this farmer.");
+      }
+    } finally {
+      setIsSendingMessage(false);
+    }
   };
 
   const handleWishlistToggle = () => {
@@ -388,8 +411,8 @@ const ProductDetailPage = () => {
                     required
                   ></textarea>
                   <div className="flex space-x-2">
-                    <button type="submit" className="btn btn-primary">
-                      Send Message
+                    <button type="submit" className="btn btn-primary" disabled={isSendingMessage}>
+                      {isSendingMessage ? "Sending..." : "Send Message"}
                     </button>
                     <button
                       type="button"

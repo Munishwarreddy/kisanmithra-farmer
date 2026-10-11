@@ -2,15 +2,93 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit"
 import axios from "axios"
 import { toast } from "react-toastify"
 import { clearCart } from "./cartSlice"
+import { getApiBaseUrl } from "../../utils/apiUrl"
 
-const API_URL = import.meta.env.VITE_API_URL
+const API_URL = getApiBaseUrl()
+const isMongoId = (value) => /^[a-f\d]{24}$/i.test(String(value || ""))
+const demoOrdersKey = (userId) => `demoOrders:${userId}`
+
+const readDemoOrders = (userId) => {
+  if (!userId) return []
+  try {
+    return JSON.parse(localStorage.getItem(demoOrdersKey(userId)) || "[]")
+  } catch {
+    return []
+  }
+}
+
+const saveDemoOrder = (order, userId) => {
+  const orders = readDemoOrders(userId)
+  localStorage.setItem(demoOrdersKey(userId), JSON.stringify([order, ...orders]))
+}
+
+const createDemoOrder = (orderData, user) => {
+  const now = new Date().toISOString()
+  const id = `demo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const subtotal = orderData.items.reduce(
+    (total, item) => total + Number(item.price || 0) * Number(item.quantity || 0),
+    0
+  )
+
+  return {
+    _id: id,
+    orderNumber: id.toUpperCase(),
+    consumer: {
+      _id: user._id || user.id,
+      name: user.name || "Consumer",
+      email: user.email || "",
+      phone: user.phone || "",
+    },
+    farmer: {
+      _id: orderData.farmer,
+      name: orderData.farmerName || "Demo Farmer",
+      email: orderData.farmerEmail || "",
+    },
+    items: orderData.items.map((item, index) => ({
+      _id: `${id}-item-${index}`,
+      product: {
+        _id: item.product,
+        name: item.name || "Sample product",
+        images: item.image ? [item.image] : [],
+      },
+      name: item.name || "Sample product",
+      unit: item.unit || "kg",
+      quantity: Number(item.quantity),
+      price: Number(item.price),
+    })),
+    subtotal,
+    deliveryFee: 0,
+    tax: 0,
+    totalAmount: subtotal,
+    paymentMethod: orderData.paymentMethod || "cash",
+    paymentStatus: "pending",
+    status: "placed",
+    pickupDetails: orderData.pickupDetails,
+    deliveryDetails: orderData.deliveryDetails,
+    notes: orderData.notes || "",
+    isDemo: true,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
 
 // Create order
 export const createOrder = createAsyncThunk(
   "orders/createOrder",
   async (orderData, { rejectWithValue, getState, dispatch }) => {
     try {
-      const token = getState().auth.token
+      const { user, token } = getState().auth
+      const userId = user?._id || user?.id
+      const hasSampleIds = !isMongoId(orderData.farmer) ||
+        orderData.items.some((item) => !isMongoId(item.product))
+
+      if (hasSampleIds) {
+        if (!userId) return rejectWithValue("Please sign in again before placing your order.")
+        const demoOrder = createDemoOrder(orderData, user)
+        saveDemoOrder(demoOrder, userId)
+        dispatch(clearCart())
+        return { success: true, data: demoOrder, demo: true }
+      }
 
       const config = {
         headers: {
@@ -26,7 +104,7 @@ export const createOrder = createAsyncThunk(
 
       return data
     } catch (error) {
-      const message = error.response && error.response.data.message ? error.response.data.message : error.message
+      const message = error.response?.data?.message || error.message
       return rejectWithValue(message)
     }
   },
@@ -46,7 +124,14 @@ export const getConsumerOrders = createAsyncThunk(
       }
 
       const { data } = await axios.get(`${API_URL}/orders/consumer`, config)
-      return data
+      const userId = getState().auth.user?._id || getState().auth.user?.id
+      const demoOrders = readDemoOrders(userId)
+      return {
+        ...data,
+        data: [...demoOrders, ...(data.data || [])].sort(
+          (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+        ),
+      }
     } catch (error) {
       const message = error.response && error.response.data.message ? error.response.data.message : error.message
       return rejectWithValue(message)
@@ -76,6 +161,14 @@ export const getFarmerOrders = createAsyncThunk("orders/getFarmerOrders", async 
 // Get order details
 export const getOrderDetails = createAsyncThunk("orders/getOrderDetails", async (id, { rejectWithValue, getState }) => {
   try {
+    if (String(id).startsWith("demo-")) {
+      const user = getState().auth.user
+      const userId = user?._id || user?.id
+      const order = readDemoOrders(userId).find((item) => item._id === id)
+      if (!order) return rejectWithValue("Demo order not found in this browser.")
+      return { success: true, data: order }
+    }
+
     const token = getState().auth.token
 
     const config = {
@@ -170,7 +263,10 @@ const orderSlice = createSlice({
         state.loading = false
         state.success = true
         state.order = action.payload.data
-        toast.success("Order placed successfully!")
+        state.orders = [action.payload.data, ...state.orders.filter((order) => order._id !== action.payload.data._id)]
+        toast.success(action.payload.demo
+          ? "Demo order saved in this browser. No farmer was notified."
+          : "Order placed successfully!")
       })
       .addCase(createOrder.rejected, (state, action) => {
         state.loading = false

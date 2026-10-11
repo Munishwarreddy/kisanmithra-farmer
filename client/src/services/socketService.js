@@ -9,6 +9,7 @@ import {
   setTranslationLoading,
 } from "../redux/slices/aiSlice";
 import { addNotification } from "../redux/slices/notificationSlice";
+import { receiveRealtimeMessage } from "../redux/slices/messageSlice";
 
 const SOCKET_URL = import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
 
@@ -16,12 +17,16 @@ class SocketService {
   constructor() {
     this.socket = null;
     this.connected = false;
+    this.token = null;
   }
 
   connect(token) {
-    if (this.socket?.connected) {
+    if (this.socket?.connected && this.token === token) {
       return;
     }
+
+    if (this.socket) this.disconnect();
+    this.token = token;
 
     this.socket = io(SOCKET_URL, {
       auth: {
@@ -53,9 +58,13 @@ class SocketService {
 
     // Message events
     this.socket.on("message:new", (data) => {
-      console.log("New message received:", data);
-      // Handle new message - this would be handled by message slice
-      // The message already includes translations if available
+      const currentUserId = store.getState().auth.user?._id || store.getState().auth.user?.id;
+      if (data?.message && currentUserId) {
+        store.dispatch(receiveRealtimeMessage({
+          ...data,
+          currentUserId: String(currentUserId),
+        }));
+      }
     });
 
     // AI Feature events
@@ -152,13 +161,13 @@ class SocketService {
 
   joinConversation(conversationId) {
     if (this.socket?.connected) {
-      this.socket.emit("conversation:join", { conversationId });
+      this.socket.emit("conversation:join", conversationId);
     }
   }
 
   leaveConversation(conversationId) {
     if (this.socket?.connected) {
-      this.socket.emit("conversation:leave", { conversationId });
+      this.socket.emit("conversation:leave", conversationId);
     }
   }
 
@@ -167,6 +176,7 @@ class SocketService {
       this.socket.disconnect();
       this.socket = null;
       this.connected = false;
+      this.token = null;
     }
   }
 

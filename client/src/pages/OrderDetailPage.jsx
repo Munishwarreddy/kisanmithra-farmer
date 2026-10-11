@@ -41,7 +41,7 @@ const OrderDetailPage = () => {
 
     dispatch(
       sendMessage({
-        recipient: order.farmer._id,
+        recipient: receiverId,
         content: message,
       })
     );
@@ -325,10 +325,16 @@ const OrderDetailPage = () => {
 
       <div className="bg-white shadow-lg rounded-2xl overflow-hidden">
         <div className="p-8">
-          <h2 className="text-2xl font-semibold mb-6 text-gray-800">
-            Contact {user.role === "consumer" ? "Farmer" : "Customer"}
-          </h2>
-          {showMessageForm ? (
+          {order.isDemo ? (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900" role="status">
+              This sample order is stored in this browser. It is not connected to a registered farmer, so messages and order updates are unavailable.
+            </div>
+          ) : (
+            <>
+              <h2 className="text-2xl font-semibold mb-6 text-gray-800">
+                Contact {user.role === "consumer" ? "Farmer" : "Customer"}
+              </h2>
+              {showMessageForm ? (
             <form onSubmit={handleSendMessage} className="space-y-4">
               <textarea
                 value={message}
@@ -356,7 +362,7 @@ const OrderDetailPage = () => {
                 </button>
               </div>
             </form>
-          ) : (
+              ) : (
             <button
               onClick={() => setShowMessageForm(true)}
               className="flex items-center space-x-3 text-green-600 hover:text-green-700 transition-colors duration-200"
@@ -367,6 +373,8 @@ const OrderDetailPage = () => {
                 {user.role === "consumer" ? "farmer" : "customer"}
               </span>
             </button>
+              )}
+            </>
           )}
         </div>
       </div>

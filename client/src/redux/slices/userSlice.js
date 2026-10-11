@@ -1,8 +1,9 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit"
 import axios from "axios"
 import { toast } from "react-toastify"
+import { getApiBaseUrl } from "../../utils/apiUrl"
 
-const API_URL = import.meta.env.VITE_API_URL
+const API_URL = getApiBaseUrl()
 
 // Get all users (admin only)
 export const getAllUsers = createAsyncThunk("users/getAllUsers", async (_, { rejectWithValue, getState }) => {

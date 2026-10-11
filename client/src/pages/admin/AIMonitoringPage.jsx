@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import Loader from "../../components/Loader";
+import { getApiBaseUrl } from "../../utils/apiUrl";
 import {
   FaCheckCircle,
   FaExclamationTriangle,
@@ -10,7 +11,7 @@ import {
   FaDatabase,
 } from "react-icons/fa";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const API_URL = getApiBaseUrl();
 
 const AIMonitoringPage = () => {
   const [metrics, setMetrics] = useState(null);

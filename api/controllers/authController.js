@@ -45,24 +45,29 @@ exports.register = async (req, res) => {
     if (User.db.readyState !== 1) {
       return res.status(503).json({
         success: false,
-        message: "Database is unavailable. Check the MONGO_URI setting in Render and try again.",
+        message: "Database is unavailable. Please wait a moment and try again.",
       });
     }
 
-    const userExists = await User.findOne({ email });
+    const normalizedEmail = email ? email.trim().toLowerCase() : "";
+
+    const userExists = await User.findOne({ email: normalizedEmail });
 
     if (userExists) {
       return res
         .status(400)
-        .json({ success: false, message: "User already exists" });
+        .json({
+          success: false,
+          message: "User already exists with this email. Please sign in or use a different email."
+        });
     }
 
     const user = await User.create({
-      name,
-      email,
+      name: name?.trim(),
+      email: normalizedEmail,
       password,
-      role,
-      phone,
+      role: role || "consumer",
+      phone: phone?.trim(),
       address,
     });
 
@@ -77,7 +82,6 @@ exports.register = async (req, res) => {
           phone: user.phone,
           address: user.address,
         },
-        token: generateToken(user._id, user.role),
       });
     } else {
       res.status(400).json({ success: false, message: "Invalid user data" });
@@ -111,8 +115,9 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = email ? email.trim().toLowerCase() : "";
 
-    const user = await User.findOne({ email }).select("+password");
+    const user = await User.findOne({ email: normalizedEmail }).select("+password");
 
     if (!user) {
       return res

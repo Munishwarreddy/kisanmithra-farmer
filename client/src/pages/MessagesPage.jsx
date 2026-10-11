@@ -27,7 +27,7 @@ const MessagesPage = () => {
         <div className="space-y-4">
           {conversations.map((conversation) => (
             <MessageItem
-              key={conversation.user._id}
+              key={conversation.otherUser?._id || conversation.user?._id || conversation.conversationId}
               conversation={conversation}
             />
           ))}

@@ -1,9 +1,26 @@
 import { createSlice } from "@reduxjs/toolkit";
 import { toast } from "react-toastify";
+import { products as mockProducts } from "../../data/mockData";
+
+const getFarmerId = (farmer) => farmer?._id || farmer || null;
+const normalizeCartItem = (item) => {
+  const mockProduct = mockProducts.find((product) => product._id === item.productId);
+  const farmer = mockProduct?.farmer;
+
+  return {
+    ...item,
+    name: item.name || mockProduct?.name,
+    image: item.image || mockProduct?.images?.[0] || mockProduct?.image || null,
+    unit: item.unit || mockProduct?.unit || "kg",
+    farmerId: item.farmerId || getFarmerId(farmer),
+    farmerName: item.farmerName || mockProduct?.farmerName || farmer?.name || "Farmer",
+    farmerEmail: item.farmerEmail || mockProduct?.farmerEmail || farmer?.email || "",
+  };
+};
 
 // Get cart from localStorage
 const cartItemsFromStorage = localStorage.getItem("cartItems")
-  ? JSON.parse(localStorage.getItem("cartItems"))
+  ? JSON.parse(localStorage.getItem("cartItems")).map(normalizeCartItem)
   : [];
 
 const initialState = {
@@ -19,11 +36,15 @@ const cartSlice = createSlice({
   initialState,
   reducers: {
     addToCart: (state, action) => {
-      const { product, quantity } = action.payload;
+      const product = action.payload.product || action.payload;
+      const quantity = action.payload.quantity || 1;
+      const productFarmer = product.farmer;
+      const productFarmerId = getFarmerId(productFarmer) || product.farmerId;
+      const productFarmerName = productFarmer?.name || product.farmerName || "Farmer";
 
       if (
         state.cartItems.length === 0 ||
-        product.farmer._id === state.farmerId
+        String(productFarmerId) === String(state.farmerId)
       ) {
         const existItem = state.cartItems.find(
           (item) => item.productId === product._id
@@ -43,16 +64,18 @@ const cartSlice = createSlice({
             image:
               product.images && product.images.length > 0
                 ? product.images[0]
-                : null,
+                : product.image || null,
+            unit: product.unit || "kg",
             price: product.price,
             quantity,
-            farmerId: product.farmer._id,
-            farmerName: product.farmer.name,
+            farmerId: productFarmerId,
+            farmerName: productFarmerName,
+            farmerEmail: product.farmerEmail || productFarmer?.email || "",
           });
 
           if (state.farmerId === null) {
-            state.farmerId = product.farmer._id;
-            state.farmerName = product.farmer.name;
+            state.farmerId = productFarmerId;
+            state.farmerName = productFarmerName;
           }
 
           toast.success(`Added ${product.name} to your cart`);

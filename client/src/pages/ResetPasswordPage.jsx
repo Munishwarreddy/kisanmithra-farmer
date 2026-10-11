@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { FaLock, FaLeaf, FaEye, FaEyeSlash, FaCheckCircle, FaShieldAlt } from "react-icons/fa";
+import { getApiBaseUrl } from "../utils/apiUrl";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const API_URL = getApiBaseUrl();
 
 const ResetPasswordPage = () => {
   const { token } = useParams();

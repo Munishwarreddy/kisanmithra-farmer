@@ -2,6 +2,9 @@ import { Link } from "react-router-dom"
 import { FaCircle } from "react-icons/fa"
 
 const MessageItem = ({ conversation }) => {
+  const otherUser = conversation.otherUser || conversation.user;
+  if (!otherUser || !conversation.lastMessage) return null;
+
   // Format date
   const formatDate = (dateString) => {
     const date = new Date(dateString)
@@ -22,17 +25,17 @@ const MessageItem = ({ conversation }) => {
   }
 
   return (
-    <Link to={`/messages/${conversation.user._id}`} className="block">
+    <Link to={`/messages/${otherUser._id}`} className="block">
       <div className="card p-4 mb-4 hover:bg-gray-50 transition-colors">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-              <span className="text-green-600 font-bold">{conversation.user.name.charAt(0)}</span>
+              <span className="text-green-600 font-bold">{otherUser.name?.charAt(0) || "?"}</span>
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h3 className="font-medium">{conversation.user.name}</h3>
-                <span className="text-xs text-gray-500 capitalize">({conversation.user.role})</span>
+                <h3 className="font-medium">{otherUser.name}</h3>
+                <span className="text-xs text-gray-500 capitalize">({otherUser.role})</span>
               </div>
               <p className="text-sm text-gray-600 truncate max-w-xs">{conversation.lastMessage.content}</p>
             </div>

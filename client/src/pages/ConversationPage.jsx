@@ -23,6 +23,7 @@ const ConversationPage = () => {
   const messagesEndRef = useRef(null);
 
   const [newMessage, setNewMessage] = useState("");
+  const [sending, setSending] = useState(false);
   const { messages, loading } = useSelector((state) => state.messages);
   const { user } = useSelector((state) => state.auth);
   const { dealSummaries, sentiments, smartReplies } = useSelector((state) => state.ai);
@@ -30,7 +31,7 @@ const ConversationPage = () => {
   const conversationMessages = messages[userId] || [];
   
   // Generate conversation ID
-  const conversationId = [user._id, userId].sort().join('_');
+  const conversationId = [user?._id || user?.id, userId].map(String).sort().join('_');
   const dealSummary = dealSummaries[conversationId];
 
   useEffect(() => {
@@ -54,17 +55,22 @@ const ConversationPage = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversationMessages]);
 
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
     if (newMessage.trim() === "") return;
 
-    dispatch(
-      sendMessage({
+    setSending(true);
+    try {
+      await dispatch(sendMessage({
         recipient: userId,
         content: newMessage,
-      })
-    );
-    setNewMessage("");
+      })).unwrap();
+      setNewMessage("");
+    } catch {
+      // Keep the message available so it can be retried.
+    } finally {
+      setSending(false);
+    }
   };
 
   const formatTime = (timestamp) => {
@@ -91,7 +97,7 @@ const ConversationPage = () => {
           <h2 className="text-xl font-semibold">
             {conversationMessages.length > 0
               ? conversationMessages[0].sender._id === user._id
-                ? conversationMessages[0].receiver.name
+                ? conversationMessages[0].recipient.name
                 : conversationMessages[0].sender.name
               : "Conversation"}
           </h2>
@@ -194,7 +200,7 @@ const ConversationPage = () => {
             <button
               type="submit"
               className="bg-green-500 text-white p-2 rounded-lg hover:bg-green-600 transition-colors"
-              disabled={newMessage.trim() === ""}
+              disabled={newMessage.trim() === "" || sending}
             >
               <FaPaperPlane />
             </button>

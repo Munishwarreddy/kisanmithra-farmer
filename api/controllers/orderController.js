@@ -1,6 +1,7 @@
 const Order = require("../models/OrderModel");
 const Product = require("../models/ProductModel");
 const Notification = require("../models/NotificationModel");
+const mongoose = require("mongoose");
 const { emitToUser } = require("../services/socketService");
 
 // @desc    Create an order
@@ -8,15 +9,45 @@ const { emitToUser } = require("../services/socketService");
 // @access  Private (Consumer only)
 exports.createOrder = async (req, res) => {
   try {
-    const { farmer, items, pickupDetails, deliveryDetails, notes } = req.body;
+    const { items, pickupDetails, deliveryDetails, notes, paymentMethod } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Add at least one product before placing the order.",
+      });
+    }
 
     let totalAmount = 0;
+    let orderFarmer = null;
     for (const item of items) {
+      if (!mongoose.Types.ObjectId.isValid(item.product)) {
+        return res.status(400).json({
+          success: false,
+          message: "This sample product is not linked to a registered farmer and cannot be ordered through the API.",
+        });
+      }
+
       const product = await Product.findById(item.product);
       if (!product) {
         return res.status(404).json({
           success: false,
           message: `Product ${item.product} not found`,
+        });
+      }
+
+      if (orderFarmer && orderFarmer.toString() !== product.farmer.toString()) {
+        return res.status(400).json({
+          success: false,
+          message: "An order can contain products from only one farmer.",
+        });
+      }
+      orderFarmer = product.farmer;
+
+      if (!Number.isInteger(Number(item.quantity)) || Number(item.quantity) < 1) {
+        return res.status(400).json({
+          success: false,
+          message: "Each product quantity must be at least one.",
         });
       }
 
@@ -35,10 +66,11 @@ exports.createOrder = async (req, res) => {
 
     const order = await Order.create({
       consumer: req.user._id,
-      farmer,
+      farmer: orderFarmer,
       items,
       subtotal: req.body.subtotal || totalAmount,
       totalAmount: req.body.totalAmount || totalAmount,
+      paymentMethod,
       pickupDetails,
       deliveryDetails,
       notes,

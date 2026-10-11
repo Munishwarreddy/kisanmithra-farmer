@@ -65,7 +65,7 @@ const SavedFarmersPage = () => {
               >
                 <div className="relative">
                   <img
-                    src={farmer.profileImage || "/placeholder.png"}
+                    src={farmer.profileImage || farmer.image || farmer.photo || "/placeholder.png"}
                     alt={farmer.name}
                     className="w-full h-48 object-cover"
                   />
@@ -86,10 +86,14 @@ const SavedFarmersPage = () => {
                 <div className="p-6">
                   <h3 className="text-xl font-bold text-gray-800 mb-2">{farmer.name}</h3>
                   
-                  {farmer.location && (
+                  {(farmer.location || farmer.farmLocation || farmer.address) && (
                     <div className="flex items-center gap-2 text-gray-600 mb-3">
                       <FaMapMarkerAlt className="text-green-500" />
-                      <span className="text-sm">{farmer.location}</span>
+                      <span className="text-sm">
+                        {typeof farmer.location === "string"
+                          ? farmer.location
+                          : farmer.farmLocation || [farmer.address?.city, farmer.address?.state].filter(Boolean).join(", ")}
+                      </span>
                     </div>
                   )}
 
