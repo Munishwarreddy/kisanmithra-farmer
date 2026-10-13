@@ -10,8 +10,9 @@ import {
 } from "../redux/slices/aiSlice";
 import { addNotification } from "../redux/slices/notificationSlice";
 import { receiveRealtimeMessage } from "../redux/slices/messageSlice";
+import { getApiBaseUrl } from "../utils/apiUrl";
 
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
+const SOCKET_URL = getApiBaseUrl().replace(/\/api\/?$/i, "");
 
 class SocketService {
   constructor() {

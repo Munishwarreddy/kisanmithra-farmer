@@ -1,4 +1,5 @@
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, "");
+const productionApiUrl = "https://kisanmithra-farmer-1.onrender.com/api";
 
 /**
  * Normalize the configured API origin/base URL so both
@@ -11,6 +12,6 @@ export const getApiBaseUrl = () => {
       : `${configuredApiUrl}/api`;
   }
 
-  return import.meta.env.DEV ? "http://localhost:5000/api" : "";
+  return import.meta.env.DEV ? "http://localhost:5000/api" : productionApiUrl;
 };
 
