@@ -12,7 +12,7 @@ const { verifyToken, isConsumer, isAdmin, isFarmer } = require('../utils/authMid
 
 // Public route for webhook (Stripe will call this)
 // Note: This should use raw body parser, not JSON parser
-router.post('/webhook', express.raw({ type: 'application/json' }), handleWebhook);
+router.post('/webhook', handleWebhook);
 
 // Protected routes
 router.post('/create-intent', verifyToken, isConsumer, createPaymentIntent);

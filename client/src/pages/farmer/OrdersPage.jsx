@@ -17,6 +17,7 @@ const OrdersPage = () => {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [newStatus, setNewStatus] = useState("");
+  const [statusUpdating, setStatusUpdating] = useState(false);
 
   useEffect(() => {
     dispatch(getFarmerOrders());
@@ -33,10 +34,26 @@ const OrdersPage = () => {
     setShowStatusModal(true);
   };
 
-  const confirmStatusUpdate = () => {
-    if (selectedOrder && newStatus) {
-      dispatch(updateOrderStatus({ id: selectedOrder._id, status: newStatus }));
-      setShowStatusModal(false);
+  const getAvailableStatuses = (status) => {
+    const transitions = {
+      pending: ["accepted", "rejected", "cancelled"],
+      placed: ["accepted", "rejected", "cancelled"],
+      accepted: ["completed", "cancelled"],
+    };
+    return [status, ...(transitions[status] || [])];
+  };
+
+  const confirmStatusUpdate = async () => {
+    if (selectedOrder && newStatus && newStatus !== selectedOrder.status) {
+      setStatusUpdating(true);
+      try {
+        await dispatch(updateOrderStatus({ id: selectedOrder._id, status: newStatus })).unwrap();
+        setShowStatusModal(false);
+      } catch {
+        // Keep the dialog open so the farmer can retry after the thunk reports the error.
+      } finally {
+        setStatusUpdating(false);
+      }
     }
   };
 
@@ -122,11 +139,13 @@ const OrdersPage = () => {
                 <button
                   onClick={() => handleUpdateStatus(order)}
                   className="btn btn-outline"
-                  disabled={
-                    order.status === "completed" || order.status === "cancelled"
-                  }
+                  disabled={!['pending', 'placed', 'accepted'].includes(order.status)}
                 >
-                  Update Status
+                  {order.status === "pending" || order.status === "placed"
+                    ? "Review Order"
+                    : order.status === "accepted"
+                    ? "Update Status"
+                    : "Order Closed"}
                 </button>
               </div>
             </div>
@@ -165,25 +184,27 @@ const OrdersPage = () => {
                 onChange={(e) => setNewStatus(e.target.value)}
                 className="form-input"
               >
-                <option value="pending">Pending</option>
-                <option value="accepted">Accepted</option>
-                <option value="rejected">Rejected</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
+                {getAvailableStatuses(selectedOrder.status).map((status) => (
+                  <option key={status} value={status}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setShowStatusModal(false)}
+                disabled={statusUpdating}
                 className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmStatusUpdate}
+                disabled={statusUpdating || newStatus === selectedOrder.status}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
               >
-                Update
+                {statusUpdating ? "Updating..." : "Update"}
               </button>
             </div>
           </div>

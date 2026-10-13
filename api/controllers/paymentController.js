@@ -8,13 +8,13 @@ const Order = require('../models/OrderModel');
  */
 exports.createPaymentIntent = async (req, res) => {
   try {
-    const { orderId, amount, currency } = req.body;
+    const { orderId } = req.body;
 
     // Validate required fields
-    if (!orderId || !amount) {
+    if (!orderId) {
       return res.status(400).json({
         success: false,
-        message: 'Order ID and amount are required',
+        message: 'Order ID is required',
       });
     }
 
@@ -35,18 +35,54 @@ exports.createPaymentIntent = async (req, res) => {
       });
     }
 
-    // Verify amount matches order total
-    if (Math.abs(amount - order.totalAmount) > 0.01) {
+    if (order.paymentMethod !== 'card') {
       return res.status(400).json({
         success: false,
-        message: 'Payment amount does not match order total',
+        message: 'This order is not set up for card payment',
       });
     }
 
-    // Create payment intent
+    if (["cancelled", "rejected", "completed"].includes(order.status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'This order is closed and cannot be paid.',
+      });
+    }
+
+    if (order.paymentStatus === 'completed') {
+      return res.status(200).json({
+        success: true,
+        data: { alreadyPaid: true, orderId: order._id },
+      });
+    }
+
+    if (order.paymentId) {
+      try {
+        const existingIntent = await paymentService.retrievePaymentIntent(order.paymentId);
+        if (existingIntent.status === 'succeeded') {
+          await paymentService.handlePaymentSuccess(existingIntent.id, order._id.toString());
+          return res.status(200).json({
+            success: true,
+            data: { alreadyPaid: true, orderId: order._id },
+          });
+        }
+        if (existingIntent.status !== 'canceled') {
+          return res.status(200).json({
+            success: true,
+            data: {
+              clientSecret: existingIntent.client_secret,
+              paymentIntentId: existingIntent.id,
+            },
+          });
+        }
+      } catch (intentError) {
+        console.error('Could not reuse payment intent:', intentError);
+      }
+    }
+
     const paymentIntent = await paymentService.createPaymentIntent({
-      amount,
-      currency: currency || 'inr',
+      amount: order.totalAmount,
+      currency: 'inr',
       metadata: {
         orderId: orderId,
         orderNumber: order.orderNumber,
@@ -54,6 +90,9 @@ exports.createPaymentIntent = async (req, res) => {
         farmerId: order.farmer.toString(),
       },
     });
+
+    order.paymentId = paymentIntent.paymentIntentId;
+    await order.save();
 
     res.status(200).json({
       success: true,
@@ -103,6 +142,13 @@ exports.handlePaymentSuccess = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to update this order',
+      });
+    }
+
+    if (order.paymentId && order.paymentId !== paymentIntentId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment does not match this order',
       });
     }
 
@@ -157,6 +203,13 @@ exports.handlePaymentFailure = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to update this order',
+      });
+    }
+
+    if (order.paymentId && order.paymentId !== paymentIntentId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment does not match this order',
       });
     }
 

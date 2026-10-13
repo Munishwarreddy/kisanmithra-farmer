@@ -68,8 +68,9 @@ exports.createOrder = async (req, res) => {
       consumer: req.user._id,
       farmer: orderFarmer,
       items,
-      subtotal: req.body.subtotal || totalAmount,
-      totalAmount: req.body.totalAmount || totalAmount,
+      // Recalculate from database product prices; never trust totals sent by the browser.
+      subtotal: totalAmount,
+      totalAmount,
       paymentMethod,
       pickupDetails,
       deliveryDetails,
@@ -187,10 +188,21 @@ exports.getOrder = async (req, res) => {
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { status, trackingInfo, deliveryDate } = req.body;
+    const farmerStatuses = ["pending", "accepted", "rejected", "cancelled", "completed"];
+    const adminStatuses = ["placed", "confirmed", "packed", "shipped", "delivered", ...farmerStatuses];
+    const allowedStatuses = req.user.role === "admin" ? adminStatuses : farmerStatuses;
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Status must be pending, accepted, rejected, cancelled, or completed.",
+      });
+    }
 
     const order = await Order.findById(req.params.id)
       .populate("consumer", "name email")
-      .populate("farmer", "name");
+      .populate("farmer", "name")
+      .populate({ path: "items.product", select: "name images" });
 
     if (!order) {
       return res
@@ -208,8 +220,40 @@ exports.updateOrderStatus = async (req, res) => {
       });
     }
 
-    // Update status
+    if (
+      req.user.role !== "admin" &&
+      order.paymentMethod === "card" &&
+      order.paymentStatus !== "completed" &&
+      !["rejected", "cancelled"].includes(status)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "This order is awaiting online payment.",
+      });
+    }
+
     const oldStatus = order.status;
+    const currentStatus = oldStatus === "placed" ? "pending" : oldStatus;
+    const allowedNextStatuses = {
+      pending: ["accepted", "rejected", "cancelled"],
+      placed: ["pending", "accepted", "rejected", "cancelled"],
+      accepted: ["completed", "cancelled"],
+      rejected: [],
+      cancelled: [],
+      completed: [],
+    };
+
+    if (
+      req.user.role !== "admin" &&
+      status !== currentStatus &&
+      !allowedNextStatuses[currentStatus]?.includes(status)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot change an order from ${currentStatus} to ${status}.`,
+      });
+    }
+
     order.status = status;
 
     // Auto-update to completed when delivered (Requirement 11.8)

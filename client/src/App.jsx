@@ -34,6 +34,7 @@ const ConversationPage = lazy(() => import("./pages/ConversationPage"));
 const OrdersPage = lazy(() => import("./pages/OrdersPage"));
 const OrderDetailPage = lazy(() => import("./pages/OrderDetailPage"));
 const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
+const PaymentPage = lazy(() => import("./pages/PaymentPage"));
 const ContractsPage = lazy(() => import("./pages/ContractsPage"));
 const CreateContractPage = lazy(() => import("./pages/CreateContractPage"));
 
@@ -123,6 +124,7 @@ function App() {
             <Route path="consumer/notifications" element={<NotificationsPage />} />
             <Route path="consumer/subscriptions" element={<SubscriptionPage />} />
             <Route path="checkout" element={<CheckoutPage />} />
+            <Route path="checkout/payment/:id" element={<PaymentPage />} />
           </Route>
 
           {/* Farmer Routes */}

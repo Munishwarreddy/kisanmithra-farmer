@@ -7,6 +7,22 @@ import { getApiBaseUrl } from "../../utils/apiUrl"
 const API_URL = getApiBaseUrl()
 const isMongoId = (value) => /^[a-f\d]{24}$/i.test(String(value || ""))
 const demoOrdersKey = (userId) => `demoOrders:${userId}`
+const allDemoOrdersKey = "demoOrders:all"
+
+const readAllDemoOrders = () => {
+  try {
+    return JSON.parse(localStorage.getItem(allDemoOrdersKey) || "[]")
+  } catch {
+    return []
+  }
+}
+
+const saveAllDemoOrders = (orders) => {
+  localStorage.setItem(allDemoOrdersKey, JSON.stringify(orders))
+}
+
+const normalizeOrder = (order) =>
+  order?.status === "placed" ? { ...order, status: "pending" } : order
 
 const readDemoOrders = (userId) => {
   if (!userId) return []
@@ -20,6 +36,8 @@ const readDemoOrders = (userId) => {
 const saveDemoOrder = (order, userId) => {
   const orders = readDemoOrders(userId)
   localStorage.setItem(demoOrdersKey(userId), JSON.stringify([order, ...orders]))
+  const allOrders = readAllDemoOrders().filter((item) => item._id !== order._id)
+  saveAllDemoOrders([order, ...allOrders])
 }
 
 const createDemoOrder = (orderData, user) => {
@@ -62,7 +80,7 @@ const createDemoOrder = (orderData, user) => {
     totalAmount: subtotal,
     paymentMethod: orderData.paymentMethod || "cash",
     paymentStatus: "pending",
-    status: "placed",
+    status: "pending",
     pickupDetails: orderData.pickupDetails,
     deliveryDetails: orderData.deliveryDetails,
     notes: orderData.notes || "",
@@ -151,7 +169,16 @@ export const getFarmerOrders = createAsyncThunk("orders/getFarmerOrders", async 
     }
 
     const { data } = await axios.get(`${API_URL}/orders/farmer`, config)
-    return data
+    const farmerId = getState().auth.user?._id || getState().auth.user?.id
+    const demoOrders = readAllDemoOrders()
+      .filter((order) => String(order.farmer?._id) === String(farmerId))
+      .map(normalizeOrder)
+    return {
+      ...data,
+      data: [...demoOrders, ...(data.data || []).map(normalizeOrder)].sort(
+        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+      ),
+    }
   } catch (error) {
     const message = error.response && error.response.data.message ? error.response.data.message : error.message
     return rejectWithValue(message)
@@ -164,7 +191,10 @@ export const getOrderDetails = createAsyncThunk("orders/getOrderDetails", async 
     if (String(id).startsWith("demo-")) {
       const user = getState().auth.user
       const userId = user?._id || user?.id
-      const order = readDemoOrders(userId).find((item) => item._id === id)
+      const order = [...readDemoOrders(userId), ...readAllDemoOrders()].find(
+        (item) => item._id === id &&
+          (String(item.consumer?._id) === String(userId) || String(item.farmer?._id) === String(userId))
+      )
       if (!order) return rejectWithValue("Demo order not found in this browser.")
       return { success: true, data: order }
     }
@@ -178,7 +208,7 @@ export const getOrderDetails = createAsyncThunk("orders/getOrderDetails", async 
     }
 
     const { data } = await axios.get(`${API_URL}/orders/${id}`, config)
-    return data
+    return { ...data, data: normalizeOrder(data.data) }
   } catch (error) {
     const message = error.response && error.response.data.message ? error.response.data.message : error.message
     return rejectWithValue(message)
@@ -199,7 +229,23 @@ export const updateOrderStatus = createAsyncThunk(
         },
       }
 
-      const { data } = await axios.put(`${API_URL}/orders/${id}`, { status }, config)
+      if (String(id).startsWith("demo-")) {
+        const orders = readAllDemoOrders()
+        const order = orders.find((item) => item._id === id)
+        const userId = getState().auth.user?._id || getState().auth.user?.id
+        if (!order || String(order.farmer?._id) !== String(userId)) {
+          return rejectWithValue("This demo order is not assigned to your farmer account.")
+        }
+        const updated = { ...order, status, updatedAt: new Date().toISOString() }
+        saveAllDemoOrders(orders.map((item) => item._id === id ? updated : item))
+        const consumerOrders = readDemoOrders(order.consumer?._id)
+        localStorage.setItem(demoOrdersKey(order.consumer?._id), JSON.stringify(
+          consumerOrders.map((item) => item._id === id ? updated : item)
+        ))
+        return { success: true, data: updated }
+      }
+
+      const { data } = await axios.put(`${API_URL}/orders/${id}/status`, { status }, config)
       return data
     } catch (error) {
       const message = error.response && error.response.data.message ? error.response.data.message : error.message
@@ -280,7 +326,7 @@ const orderSlice = createSlice({
       })
       .addCase(getConsumerOrders.fulfilled, (state, action) => {
         state.loading = false
-        state.orders = action.payload.data
+        state.orders = action.payload.data.map(normalizeOrder)
       })
       .addCase(getConsumerOrders.rejected, (state, action) => {
         state.loading = false
@@ -334,6 +380,10 @@ const orderSlice = createSlice({
             order._id === action.payload.data._id ? action.payload.data : order,
           )
         }
+
+        state.orders = state.orders.map((order) =>
+          order._id === action.payload.data._id ? action.payload.data : order,
+        )
 
         toast.success(`Order status updated to ${action.payload.data.status}`)
       })

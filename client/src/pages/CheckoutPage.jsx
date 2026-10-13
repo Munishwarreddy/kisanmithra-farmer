@@ -8,7 +8,7 @@ import {
   updateCartQuantity,
   clearCart,
 } from "../redux/slices/cartSlice";
-import { createOrder } from "../redux/slices/orderSlice";
+import { createOrder, resetOrderSuccess } from "../redux/slices/orderSlice";
 import { FaArrowLeft, FaLeaf, FaTrash } from "react-icons/fa";
 import Loader from "../components/Loader";
 import { placeholder } from "../assets";
@@ -43,12 +43,18 @@ const CheckoutPage = () => {
   );
   const { user } = useSelector((state) => state.auth);
   const { loading, success, order } = useSelector((state) => state.orders);
+  const stripeConfigured = Boolean(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
   useEffect(() => {
     if (success && order) {
-      navigate(`/orders/${order._id}`);
+      dispatch(resetOrderSuccess());
+      navigate(
+        order.paymentMethod === "card"
+          ? `/checkout/payment/${order._id}`
+          : `/orders/${order._id}`
+      );
     }
-  }, [success, order, navigate]);
+  }, [success, order, dispatch, navigate]);
 
   useEffect(() => {
     if (user && user.address) {
@@ -482,11 +488,9 @@ const CheckoutPage = () => {
                   required
                 >
                   <option value="cash">Cash on Pickup/Delivery</option>
-                  <option value="card">Credit/Debit Card (Stripe)</option>
-                  <option value="bank_transfer">Bank Transfer</option>
-                  <option value="upi">UPI Payment</option>
-                  <option value="wallet">Digital Wallet</option>
-                  <option value="other">Other</option>
+                  <option value="card" disabled={isDemoOrder || !stripeConfigured}>
+                    Card / Online Payment{!stripeConfigured ? " (not configured)" : " (Stripe)"}
+                  </option>
                 </select>
                 
                 {orderDetails.paymentMethod === "card" && (
@@ -495,25 +499,20 @@ const CheckoutPage = () => {
                       💳 Secure payment powered by Stripe
                     </p>
                     <p className="text-xs text-gray-600">
-                      You will be redirected to Stripe's secure payment page after placing your order.
+                      Enter your payment details securely after placing the order.
                     </p>
                   </div>
                 )}
                 
-                {orderDetails.paymentMethod === "upi" && (
-                  <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                    <p className="text-sm text-purple-800">
-                      📱 UPI payment details will be provided after order confirmation
-                    </p>
-                  </div>
+                {!stripeConfigured && !isDemoOrder && (
+                  <p className="mt-2 text-sm text-amber-700">
+                    Online payment is unavailable until the Stripe publishable key is configured. Cash on pickup or delivery is still available.
+                  </p>
                 )}
-                
-                {orderDetails.paymentMethod === "wallet" && (
-                  <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
-                    <p className="text-sm text-indigo-800">
-                      💰 Digital wallet payment options will be shown after order confirmation
-                    </p>
-                  </div>
+                {isDemoOrder && (
+                  <p className="mt-2 text-sm text-amber-700">
+                    Sample catalog orders are for demonstration only and can’t be paid online.
+                  </p>
                 )}
               </div>
 

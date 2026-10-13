@@ -1,5 +1,7 @@
 const Category = require("../models/CategoryModel");
 
+const DEFAULT_CATEGORIES = ["Vegetables", "Fruits", "Grains", "Pulses", "Spices"];
+
 // @desc    Create a category
 // @route   POST /api/categories
 // @access  Private (Admin only)
@@ -24,7 +26,23 @@ exports.createCategory = async (req, res) => {
 // @access  Public
 exports.getAllCategories = async (req, res) => {
   try {
-    const categories = await Category.find();
+    let categories = await Category.find().sort("name");
+
+    // Keep a fresh installation usable before an admin has added categories.
+    if (categories.length === 0) {
+      try {
+        await Category.insertMany(
+          DEFAULT_CATEGORIES.map((name) => ({
+            name,
+            description: `Fresh ${name} from local farmers`,
+          }))
+        );
+      } catch (seedError) {
+        // Another request may seed the defaults at the same time.
+        if (seedError.code !== 11000) throw seedError;
+      }
+      categories = await Category.find().sort("name");
+    }
 
     res.json({
       success: true,

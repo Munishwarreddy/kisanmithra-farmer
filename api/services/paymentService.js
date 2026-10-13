@@ -44,6 +44,13 @@ exports.createPaymentIntent = async (orderData) => {
   }
 };
 
+exports.retrievePaymentIntent = async (paymentIntentId) => {
+  if (!stripe) {
+    throw new Error('Stripe is not configured. Please set STRIPE_SECRET_KEY in environment variables.');
+  }
+  return stripe.paymentIntents.retrieve(paymentIntentId);
+};
+
 /**
  * Handle successful payment
  * @param {String} paymentIntentId - Stripe payment intent ID
@@ -62,7 +69,6 @@ exports.handlePaymentSuccess = async (paymentIntentId, orderId) => {
       throw new Error('Payment has not succeeded');
     }
 
-    // Update order with payment details
     const order = await Order.findById(orderId)
       .populate('consumer', 'name email')
       .populate('farmer', 'name email');
@@ -71,10 +77,22 @@ exports.handlePaymentSuccess = async (paymentIntentId, orderId) => {
       throw new Error('Order not found');
     }
 
-    // Update order status and payment info
+    if (
+      paymentIntent.metadata.orderId !== order._id.toString() ||
+      paymentIntent.currency !== 'inr' ||
+      paymentIntent.amount_received !== Math.round(Number(order.totalAmount) * 100)
+    ) {
+      throw new Error('Payment does not match this order');
+    }
+
+    if (order.paymentStatus === 'completed') {
+      return { success: true, order, message: 'Payment already processed' };
+    }
+
     order.paymentStatus = 'completed';
     order.paymentId = paymentIntentId;
-    order.status = 'confirmed';
+    // Payment is complete; the farmer still needs to accept the order.
+    order.status = 'pending';
     await order.save();
 
     // Create notifications for both consumer and farmer
@@ -123,6 +141,11 @@ exports.handlePaymentFailure = async (paymentIntentId, orderId, errorMessage) =>
 
     if (!order) {
       throw new Error('Order not found');
+    }
+
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    if (paymentIntent.metadata.orderId !== order._id.toString()) {
+      throw new Error('Payment does not match this order');
     }
 
     // Update order payment status
